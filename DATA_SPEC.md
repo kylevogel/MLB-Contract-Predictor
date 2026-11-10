@@ -46,8 +46,8 @@ Flags (`has_opt_out`, `has_deferral`, `has_incentives`) are stored but not used 
 ## Split (by offseason)
 Train 2014-2021, validate 2022-2023, test 2024-2025.
 
-## Cleaning run (2026-11-10): 2,512 scraped rows -> 1,907 kept
-Every dropped row is in `data/processed/prepare_dropped.csv` with a reason. 2,512 = 1,907 kept + 605 dropped.
+## Cleaning run (2026-11-10): 2,512 scraped rows -> 1,904 kept
+Every dropped row is in `data/processed/prepare_dropped.csv` with a reason. 2,512 = 1,904 kept + 608 dropped.
 
 | Reason | Rows |
 | --- | --- |
@@ -62,9 +62,10 @@ Every dropped row is in `data/processed/prepare_dropped.csv` with a reason. 2,51
 | Below that season's MLB minimum salary | 2 |
 | Two-way player (Ohtani, free agency) | 1 |
 | Ohtani, other contract (2020 arbitration extension) | 1 |
+| Double-counted or superseded row, manually verified (D-14: Abreu QO, López renegotiation, Moustakas duplicate) | 3 |
 
-Kept: 1,587 free agent, 146 arbitration extension, 113 veteran extension, 61 pre-arbitration extension.
-Hitters 865, pitchers 1,042. Split sizes: train (2014-2021) 1,194, validation (2022-2023) 346, test (2024-2025) 367.
+Kept: 1,586 free agent, 146 arbitration extension, 111 veteran extension, 61 pre-arbitration extension.
+Hitters 863, pitchers 1,041. Split sizes: train (2014-2021) 1,192, validation (2022-2023) 346, test (2024-2025) 366.
 
 ### New columns
 `aav_adjusted` and `deferred_amount_m` (Spotrac deferral list, 3% discount, see DECISIONS.md D-12), `at_league_minimum`,

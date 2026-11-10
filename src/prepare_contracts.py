@@ -162,6 +162,15 @@ def main(raw="data/raw/spotrac_raw_contracts.csv", ids_path="data/processed/play
     df = drop(df.pos_group == "two_way", "two_way_player")
     for pid, why in PLAYER_EXCLUSIONS.items():
         df = drop(df.mlb_id == pid, why)
+    # 4a2. manually verified double-counted / superseded rows (D-14, data/raw/manual_row_exclusions.csv)
+    exp = pathlib.Path("data/raw/manual_row_exclusions.csv")
+    if exp.exists():
+        ex = pd.read_csv(exp)
+        for r in ex.itertuples():
+            hit = ((df.mlb_id == r.mlb_id) & (df.offseason == r.offseason) & (df.contract_type == r.contract_type)
+                   & (df.years_new == r.years_new) & ((df.total_value_m - r.total_value_m).abs() < 0.01))
+            assert hit.sum() <= 1, f"exclusion matches {hit.sum()} rows: {r}"
+            df = drop(hit, "manual_row_exclusion_D14")
     # 4b. follow-up free-agent deals in the same class (released, then re-signed cheaply): keep the biggest
     fa = df.contract_type == "free_agent"
     grp = df[fa].groupby(["mlb_id", "offseason"]).total_value_m
