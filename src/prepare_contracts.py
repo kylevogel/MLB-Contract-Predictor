@@ -18,11 +18,13 @@ import sys
 import unicodedata
 import pandas as pd
 from schema import offseason_of, FIRST_OFFSEASON, LAST_OFFSEASON
+from adjusted_aav import attach_adjusted_aav
 
-# MLB minimum salary by season ($M). From the CBA; verify before publishing.
+# MLB minimum salary by season ($M). Verified 2026-11-10 against AP/MLBPA tables (via theScore), Baseball-Reference Bullpen and Spotrac's CBA summary.
 MIN_SALARY = {2015: .5075, 2016: .5075, 2017: .535, 2018: .545, 2019: .555, 2020: .5635,
               2021: .5705, 2022: .70, 2023: .72, 2024: .74, 2025: .76, 2026: .78}
 FOLLOWUP_FRACTION = 0.5  # same-class FA rows worth < 50% of the player's biggest deal are dropped
+PLAYER_EXCLUSIONS = {660271: "two_way_player_ohtani"}  # D-08: Ohtani is excluded entirely (all contracts)
 INTL_CODES = {"JPN", "KOR", "MEX", "DOM", "OS", "CUB", "TWN", "AUS", "VEN", "NED", "ITA", ""}
 SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv)\b\.?")
 
@@ -130,6 +132,14 @@ def main(raw="data/raw/spotrac_raw_contracts.csv", ids_path="data/processed/play
     # 1. duplicates
     key = ["spotrac_id", "contract_type", "years_new", "total_value_m", "team_to", "spotrac_start_year"]
     df = drop(df.duplicated(key, keep="first"), "duplicate")
+    # 1b. manual corrections where independent sources disagree with Spotrac (data/raw/manual_contract_overrides.csv)
+    df["notes"] = ""
+    ovp = pathlib.Path("data/raw/manual_contract_overrides.csv")
+    if ovp.exists():
+        for o in pd.read_csv(ovp).itertuples():
+            m = (df.spotrac_id == o.spotrac_id) & (df.years_new == o.orig_years) & ((df.total_value_m - o.orig_total_m).abs() < 0.05)
+            df.loc[m, ["years_new", "total_value_m", "aav_nominal_m"]] = [o.years_new, o.total_value_m, o.aav_nominal_m]
+            df.loc[m, "notes"] = o.source_note
     # 2. class window
     df = assign_class(df)
     df = drop(df.offseason.isna(), "undated_pre_2013_extension")
@@ -147,6 +157,11 @@ def main(raw="data/raw/spotrac_raw_contracts.csv", ids_path="data/processed/play
     df = drop(df.mlb_id.isna() & (df.n_candidates == 0), "not_in_mlb_register_no_mlb_history")
     df = drop(df.mlb_id.isna(), "ambiguous_player_id")
     df = drop(df.mlb_debut_year > df.offseason, "no_mlb_history_before_signing")
+    # 4a. two-way players (D-08)
+    df["pos_group"] = df.position.map(pos_group)
+    df = drop(df.pos_group == "two_way", "two_way_player")
+    for pid, why in PLAYER_EXCLUSIONS.items():
+        df = drop(df.mlb_id == pid, why)
     # 4b. follow-up free-agent deals in the same class (released, then re-signed cheaply): keep the biggest
     fa = df.contract_type == "free_agent"
     grp = df[fa].groupby(["mlb_id", "offseason"]).total_value_m
@@ -164,12 +179,16 @@ def main(raw="data/raw/spotrac_raw_contracts.csv", ids_path="data/processed/play
     ambiguous.to_csv("data/processed/review_id_ambiguous.csv", index=False)
     multi = df[df.duplicated(["mlb_id", "offseason", "contract_type"], keep=False)]
     multi.to_csv("data/processed/review_same_player_same_class.csv", index=False)
+    deferrals = pd.read_csv("data/raw/spotrac_deferrals_raw.csv", sep="|")
+    df = attach_adjusted_aav(df, deferrals, sign_ref)  # discounts deferred money (see adjusted_aav.py)
     out = df.rename(columns={"team_to": "team", "team_from": "prev_team", "total_value_m": "total_value_nominal",
                              "aav_nominal_m": "aav_nominal", "spotrac_id": "spotrac_id"})
+    season_out = out.spotrac_start_year.fillna(out.offseason + 1).astype(int)
+    out["at_league_minimum"] = (out.aav_nominal / season_out.map(MIN_SALARY) - 1).abs() < 0.01
     out["source_url"] = "https://www.spotrac.com/mlb/player/_/id/" + out.spotrac_id.astype(str) + "/" + out.slug
-    out["notes"] = ""
-    for c in ["service_years_at_signing", "aav_adjusted", "has_opt_out", "has_deferral", "has_incentives"]:
-        out[c] = pd.NA  # not scraped yet (needs player pages)
+    # overrides change years/total, so match deferrals on the ORIGINAL Spotrac terms for those rows (none have deferrals today)
+    for c in ["service_years_at_signing", "has_opt_out", "has_incentives"]:
+        out[c] = pd.NA  # not scraped (needs player pages)
     out.to_csv("data/raw/contracts_raw.csv", index=False)
     pd.concat(dropped).to_csv("data/processed/prepare_dropped.csv", index=False)
     summary = pd.concat(dropped).drop_reason.value_counts()

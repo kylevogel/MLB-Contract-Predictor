@@ -46,38 +46,44 @@ Flags (`has_opt_out`, `has_deferral`, `has_incentives`) are stored but not used 
 ## Split (by offseason)
 Train 2014-2021, validate 2022-2023, test 2024-2025.
 
-## First cleaning run (2026-11-10): 2,512 scraped rows -> 1,909 kept
-Every dropped row is in `data/processed/prepare_dropped.csv` with a reason.
+## Cleaning run (2026-11-10): 2,512 scraped rows -> 1,907 kept
+Every dropped row is in `data/processed/prepare_dropped.csv` with a reason. 2,512 = 1,907 kept + 605 dropped.
 
 | Reason | Rows |
 | --- | --- |
 | Undated pre-2013 extension (outside window) | 206 |
 | Minor-league deal ($0 value) | 161 |
 | Outside the class window (extensions before Nov 2014 or after Oct 2026) | 147 |
-| No completed MLB season before signing (international imports, pre-debut prospects) | 57 |
-| Follow-up deal in the same class (< 50% of the player's biggest deal) | 15 |
+| No completed MLB season before signing (international imports, pre-debut prospects, debut-season extensions) | 57 |
+| Follow-up league-minimum deal in the same class | 15 |
 | Exact duplicate | 10 |
 | Not in the MLB register (no MLB history) | 3 |
 | Zero contract years | 2 |
 | Below that season's MLB minimum salary | 2 |
+| Two-way player (Ohtani, free agency) | 1 |
+| Ohtani, other contract (2020 arbitration extension) | 1 |
 
-Kept: 1,588 free agent, 147 arbitration extension, 113 veteran extension, 61 pre-arbitration extension.
-Hitters 874, pitchers 1,034, two-way 1 (Ohtani).
+Kept: 1,587 free agent, 146 arbitration extension, 113 veteran extension, 61 pre-arbitration extension.
+Hitters 865, pitchers 1,042. Split sizes: train (2014-2021) 1,194, validation (2022-2023) 346, test (2024-2025) 367.
+
+### New columns
+`aav_adjusted` and `deferred_amount_m` (Spotrac deferral list, 3% discount, see DECISIONS.md D-12), `at_league_minimum`,
+and previous-contract features `has_prev_contract`, `prev_contract_type`, `prev_contract_years`, `prev_contract_total_m`,
+`prev_contract_aav`, `prev_contract_aav_adjusted`, `years_since_prev_contract` (D-10). Qualifying-offer flags are not used.
+`service_years_at_signing`, `has_opt_out`, `has_incentives` are still empty.
 
 ### Verification against independent sources
 24 headline contracts from MLB.com, CBS Sports, MLB Trade Rumors and Boardroom were compared with the dataset:
-21 match exactly on years and total value. The 3 differences are explained:
-- Mike Trout (extension): Spotrac counts 12 yrs / $426.5M (includes the 2 years already owed); MLB.com and MLBTR count new money only (10 yrs / $360M).
-- Julio Rodriguez (extension signed in his debut season): dropped by the no-completed-season rule.
-- Yoshinobu Yamamoto: dropped as an international signing (intended).
-Name-to-ID matching: 9 players needed manual overrides (`data/raw/manual_id_overrides.csv`), 3 not in the MLB register were dropped.
+21 matched exactly on years and total value. The 3 differences: Mike Trout (corrected to 10 yrs / $360M new money by majority of sources, D-03),
+Julio Rodriguez (dropped, no completed season, D-06) and Yoshinobu Yamamoto (international, dropped).
+Minimum-salary floors and the follow-up rule were verified (D-07). Name matching needed 9 manual overrides.
 
 ## Open items
-0. See the questions list in the team chat for extension-overlap years, in-season debut extensions, and Spotrac redistribution.
+0. All decisions and open items are tracked in `DECISIONS.md`.
 1. The 2020 shortened season: add a flag or scale counting stats to 162 games.
-2. Two-way players (Ohtani): hitter model, pitcher model, or drop.
+2. (Resolved) Two-way players: Ohtani excluded, D-08.
 3. Pre-arb extensions are a small group. Check counts before deciding whether to model contract_type as a feature or as separate models.
-4. Spotrac data licensing: confirm what we can republish in the public dataset link the course requires.
+4. Spotrac data licensing (D-13): raw Spotrac files stay out of the public repo until decided.
 
 ## Collection (Spotrac, scraped Nov 10 2026)
 `src/scrape_spotrac_console.js` runs in the browser console on a Spotrac MLB page (about 60 requests,
@@ -86,5 +92,5 @@ Name-to-ID matching: 9 players needed manual overrides (`data/raw/manual_id_over
   Includes 164 $0 rows and 206 under $1M rows to review, 8 apparent duplicates, 304 re-signings (From == To).
 - Extension rows: 693 all-time; 340 in scope (289 dated, 51 year-only); 206 are pre-2013 and out of scope.
 - Spotrac ignores `?query=` filters. It needs path URLs (`/_/year/2024`, `/_/type/...`, `/_/start/.../end/.../page/N`).
-- `aav_adjusted` (luxury-tax AAV) and `service_years_at_signing` appear on each player's own page
-  ("Annual Luxury Tax", "YOS @ Signing") and are NOT scraped yet. That is about 2,000 page loads.
+- Deferrals: `src/scrape_spotrac_deferrals_console.js` downloads Spotrac's all-time deferred-money list (104 contracts); `adjusted_aav.py` turns it into `aav_adjusted` (D-12).
+- Spotrac player pages also list each contract's signing date and 'YOS @ Signing' (service time). Not scraped (about 1,100 page loads); a possible later improvement for free-agent dates and service time.

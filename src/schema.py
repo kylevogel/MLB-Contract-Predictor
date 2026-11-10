@@ -11,7 +11,7 @@ CONTRACT_TYPES = [
     "extension_arb",         # extension signed during arbitration years
     "extension_veteran",     # Spotrac "Veteran Extension" (past arbitration, or buying out FA years)
 ]
-POS_GROUPS = ["hitter", "pitcher", "two_way"]
+POS_GROUPS = ["hitter", "pitcher"]  # two-way players are excluded (D-08)
 FIRST_OFFSEASON, LAST_OFFSEASON = 2014, 2025  # offseason 2025 = Nov 1 2025 .. Oct 31 2026
 
 
@@ -38,11 +38,22 @@ COLUMNS = {
     "total_value_nominal": "float",   # $M
     "aav_nominal": "float",           # $M, total / years_new (TARGET)
     "aav_adjusted": "float",          # $M, deferrals discounted / CBT-style
+    "deferred_amount_m": "float",   # $M of the contract paid later (Spotrac deferral list)
+    "aav_adjusted_method": "str",
+    "at_league_minimum": "bool",    # AAV within 1% of that season's MLB minimum salary (D-07)
     "has_opt_out": "bool",
     "has_deferral": "bool",
     "has_incentives": "bool",
     "source_url": "str",
     "notes": "str",
+    # previous-contract features (src/prev_contract.py)
+    "has_prev_contract": "bool",
+    "prev_contract_type": "str",
+    "prev_contract_years": "float",
+    "prev_contract_total_m": "float",
+    "prev_contract_aav": "float",
+    "prev_contract_aav_adjusted": "float",
+    "years_since_prev_contract": "float",
 }
 
 
