@@ -1,0 +1,9 @@
+__pycache__/
+.pytest_cache/
+.venv/
+.ipynb_checkpoints/
+# regenerable: python src/build_ids.py
+data/processed/player_ids.csv
+# pipeline intermediate: python src/prepare_contracts.py
+data/raw/contracts_raw.csv
+.env
