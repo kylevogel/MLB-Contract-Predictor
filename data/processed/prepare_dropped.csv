@@ -589,6 +589,9 @@ extensions_page,extension_pre_arb,24616,eloy-jimenez,Eloy Jimenez,LF,CHW,CHW,22.
 extensions_page,extension_pre_arb,17658,scott-kingery,Scott Kingery,2B,PHI,PHI,23.0,6,24.0,4.0,2018-03-25 00:00:00,transactions,2018.0,0,0,no_mlb_history_before_signing,,2017,664068.0,17975.0,kingesc01,2018.0,1994.0,4.0,29.0,1.0,
 free_agents_page,free_agent,24661,shohei-ohtani,Shohei Ohtani,SP/DH,LAA,LAD,,10,700.0,70.0,,none,2024.0,1,0,two_way_player,,2023,660271.0,19755.0,ohtansh01,2018.0,1994.0,7.0,5.0,1.0,two_way
 extensions_page,extension_arb,24661,shohei-ohtani,Shohei Ohtani,DH,LAA,LAA,26.0,2,8.5,4.25,,signed_year,2021.0,0,0,two_way_player_ohtani,,2020,660271.0,19755.0,ohtansh01,2018.0,1994.0,7.0,5.0,1.0,hitter
+free_agents_page,free_agent,13653,jose-abreu,Jose Abreu,1B/DH,CHW,CHW,,1,17.8,17.8,,none,2020.0,1,0,manual_row_exclusion_D14,,2019,547989.0,15676.0,abreujo02,2014.0,1987.0,1.0,29.0,1.0,hitter
+extensions_page,extension_veteran,20890,reynaldo-l%C3%B3pez,Reynaldo López,SP,ATL,ATL,30.0,3,30.0,10.0,2024-11-02 00:00:00,transactions,2025.0,0,0,manual_row_exclusion_D14,,2024,625643.0,16400.0,lopezre01,2016.0,1994.0,1.0,4.0,1.0,pitcher
+extensions_page,extension_veteran,8532,mike-moustakas,Mike Moustakas,3B,KC,KC,29.0,1,6.5,6.5,,signed_year,2018.0,0,0,manual_row_exclusion_D14,,2017,519058.0,4892.0,moustmi01,2011.0,1988.0,9.0,11.0,1.0,hitter
 free_agents_page,free_agent,5210,alexei-ram%C3%ADrez,Alexei Ramírez,SS,SD,TB,,1,0.5075,0.5075,,none,2016.0,0,0,followup_deal_same_class,,2015,493351.0,5133.0,ramiral03,2008.0,1981.0,9.0,22.0,1.0,hitter
 free_agents_page,free_agent,7558,tommy-hunter,Tommy Hunter,RP,CLE,BAL,,1,0.5075,0.5075,,none,2016.0,0,0,followup_deal_same_class,,2015,488984.0,1157.0,hunteto02,2008.0,1986.0,7.0,3.0,1.0,pitcher
 free_agents_page,free_agent,7556,neftali-feliz,Neftali Feliz,RP,MIL,KC,,1,0.535,0.535,,none,2017.0,0,0,followup_deal_same_class,,2016,491703.0,18.0,felizne01,2009.0,1988.0,5.0,2.0,1.0,pitcher
