@@ -1,0 +1,4 @@
+# Spotrac's terms say not to republish its materials (DECISIONS.md D-13): raw scrapes stay local.
+raw/spotrac_*.csv
+raw/contracts_raw.csv
+processed/player_ids.csv
