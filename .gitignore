@@ -7,3 +7,5 @@ data/processed/player_ids.csv
 # pipeline intermediate: python src/prepare_contracts.py
 data/raw/contracts_raw.csv
 .env
+# raw Spotrac scrapes (Spotrac terms: personal use only); the cleaned dataset is published, the raw pages are not
+data/raw/spotrac_*.csv
