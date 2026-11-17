@@ -16,7 +16,7 @@ is a blog post plus this repo.
 
 ## Run and test
 ```
-pip install pandas requests pybaseball pytest
+pip install pandas requests pybaseball pytest torch
 python src/build_ids.py            # Chadwick IDs
 python src/prepare_contracts.py    # raw Spotrac scrape -> rule-compliant rows
 python src/clean_contracts.py      # validated data/processed/contracts.csv
