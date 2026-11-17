@@ -73,6 +73,7 @@ def fetch(url: str, tries: int = 4) -> str:
     for attempt in range(tries):
         r = requests.get(url, headers=HEADERS, timeout=60)
         if r.status_code == 200:
+            r.encoding = "utf-8"  # pages are UTF-8; requests may guess Latin-1
             return r.text
         if r.status_code == 429 or r.status_code >= 500:
             time.sleep(60 * (attempt + 1))  # rate-limited or server error: back off
