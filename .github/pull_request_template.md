@@ -1,5 +1,6 @@
 ## Linked issue
 Closes #<issue_number>
+<!-- Replace <issue_number> with the real number, e.g. "Closes #12", or the issue won't auto-close. -->
 
 ## Coding model
 <!-- Agent and model used, e.g. "Claude Code with Sonnet 5.5". "None" if hand-written. -->
