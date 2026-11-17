@@ -9,3 +9,5 @@ data/raw/contracts_raw.csv
 .env
 # raw Spotrac scrapes (Spotrac terms: personal use only); the cleaned dataset is published, the raw pages are not
 data/raw/spotrac_*.csv
+# raw Baseball-Reference scrapes (Sports Reference terms restrict redistribution): python src/scrape_bref_stats.py
+data/raw/bref_*.csv
