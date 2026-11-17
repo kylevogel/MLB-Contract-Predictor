@@ -36,12 +36,18 @@ the signed year minus 1 (51 rows; `date_source` records which).
 
 Flags (`has_opt_out`, `has_deferral`, `has_incentives`) are stored but not used as inputs until we decide how.
 
-## Features (built in `fetch_stats.py`)
-- Last **3 completed seasons** before the signing date (no future information).
-  Hitters: WAR, PA, wRC+. Pitchers: WAR, IP, FIP.
+## Features (built in `src/build_features.py`, D-15 and D-16)
+- Source: Baseball-Reference season tables (`src/scrape_bref_stats.py`, seasons 2012-2025).
+- Window: the 3 completed seasons before signing (offseason-2 .. offseason), so no future information.
+  Each stat is the equal-weight average over the seasons played. Seasons under 50 PA (hitters) or
+  10 IP (pitchers) are skipped unless every window season is under that. 2020 WAR and runs are scaled x 162/60.
+  Hitters: `war_3yr`, `r_3yr`, `ba_3yr`, `ops_plus_3yr`. Pitchers: `war_3yr`, `era_plus_3yr`, `fip_3yr`, `whip_3yr`.
+- Awards (both groups): `won_mvp`, `won_cy_young`, `won_gold_glove`, `won_silver_slugger` = 1 if WON in a window season.
+- `seasons_in_window` = number of seasons used. Contracts with none are dropped and logged in
+  `data/processed/features_dropped.csv` (11 rows).
+- Outputs: `data/processed/contracts_features_hitters.csv` (862), `contracts_features_pitchers.csv` (1,031).
 - Plus: age, position group, service time, contract_type, is_resign.
-- Hitters and pitchers are modelled separately. Two-way players are treated as hitters for now
-  (open question).
+- Hitters and pitchers are modelled separately. Two-way players: Ohtani excluded (D-08).
 
 ## Split (by offseason)
 Train 2014-2021, validate 2022-2023, test 2024-2025.
@@ -81,7 +87,7 @@ Minimum-salary floors and the follow-up rule were verified (D-07). Name matching
 
 ## Open items
 0. All decisions and open items are tracked in `DECISIONS.md`.
-1. The 2020 shortened season: add a flag or scale counting stats to 162 games.
+1. (Resolved) The 2020 shortened season: counting stats scaled to 162 games, D-15.
 2. (Resolved) Two-way players: Ohtani excluded, D-08.
 3. Pre-arb extensions are a small group. Check counts before deciding whether to model contract_type as a feature or as separate models.
 4. Spotrac data licensing (D-13): raw Spotrac files stay out of the public repo until decided.

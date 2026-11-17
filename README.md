@@ -4,7 +4,8 @@ Can a neural network predict the length and average annual value (AAV) of an MLB
 or extension contract from a player's performance history? Final project for Artificial
 Neural Networks and Deep Learning (Kyle Vogel, Alex Elias, Liam Scanlon).
 
-Status: data collection and cleaning finished; baselines and model work next. See `DATA_SPEC.md`
+Status: data collection, cleaning and performance features finished (hitter and pitcher datasets in
+`data/processed/`); baselines and model work next. See `DATA_SPEC.md`
 for exactly what is in the dataset and `DECISIONS.md` for every data choice, who made it and the evidence.
 
 ## Data and credits
@@ -14,6 +15,9 @@ checked against MLB.com, MLB Trade Rumors, Baseball-Reference, FanGraphs and new
 joined to player IDs from the [Chadwick Bureau register](https://github.com/chadwickbureau/register).
 The raw Spotrac pages are not in this repo (personal-use terms). The cleaned file is published
 with the permission of our course instructor.
+Season statistics and award winners come from [Baseball-Reference](https://www.baseball-reference.com)
+(Sports Reference LLC). The raw season tables are not in this repo; `src/scrape_bref_stats.py` downloads them.
+The feature files in `data/processed/` hold only 3-season averages and award flags derived from them.
 
 ## AI use
 Parts of the data pipeline were written with Claude (Anthropic). Mistakes the AI made and how we
