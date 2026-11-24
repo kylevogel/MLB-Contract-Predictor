@@ -81,7 +81,7 @@ python src/build_features.py       # writes data/processed/contracts_features_hi
 ```
 
 The Baseball-Reference season tables are not committed, so the feature files cannot be rebuilt without the scrape step.
-`src/fetch_stats.py` is the earlier FanGraphs approach, replaced by the Baseball-Reference features (D-15) and no longer used.
+The earlier FanGraphs approach (`src/fetch_stats.py`, replaced by the Baseball-Reference features in D-15) was removed in #41 and is still in the git history.
 To rebuild the contract dataset from the raw Spotrac scrape, see the pipeline order in [`AGENTS.md`](AGENTS.md).
 
 ## Repo layout
