@@ -4,6 +4,22 @@ import numpy as np
 import pandas as pd
 import pytest
 import boosted_tree as bt
+from salary_scale import to_share
+
+DATA = pathlib.Path(__file__).parents[1] / "data/processed"
+EXPECTED_COLUMNS = [
+    "model", "group", "n_train", "n_val",
+    "within_5pct", "within_10pct", "mae_usd_m", "mae_log", "r2_log",
+    "years_bucket_accuracy", "years_balanced_accuracy", "years_mae",
+    "aav_learning_rate", "aav_max_depth", "aav_max_iter",
+    "years_learning_rate", "years_max_depth", "years_max_iter"]
+
+
+def _prepared(group):
+    parts = bt.load_group(group)
+    X_tr = bt.build_X(parts["train"], group)
+    X_va = bt.align_categories(X_tr, bt.build_X(parts["val"], group))
+    return parts, X_tr, X_va
 
 
 @pytest.mark.parametrize("group", list(bt.GROUPS))
@@ -14,30 +30,52 @@ def test_no_contract_outcome_columns_used(group):
 
 
 @pytest.mark.parametrize("group", list(bt.GROUPS))
-def test_test_classes_never_loaded(group):
+def test_no_2024_2025_rows_loaded(group):
     parts = bt.load_group(group)
     assert set(parts) == {"train", "val"}
     assert all(p["offseason"].max() <= 2023 for p in parts.values())
 
 
+def test_share_target_converts_back_to_usd_m():
+    df = pd.DataFrame({"aav_nominal": [0.74, 12.5, 43.33], "offseason": [2014, 2019, 2023]})
+
+    class Exact:  # a "model" that predicts the true log share
+        def predict(self, X):
+            return bt.log_share(df)
+
+    pred = bt.predict_aav(Exact(), df, df["offseason"], max_log_share=np.inf)
+    assert pred == pytest.approx(df["aav_nominal"].to_numpy())
+    assert bt.log_share(df) == pytest.approx(np.log(to_share(df["aav_nominal"], df["offseason"])))
+
+
+def test_predictions_never_exceed_training_max_share():
+    class TooHigh:
+        def predict(self, X):
+            return np.array([0.0, -1.0, -5.0])  # share 1.0 (a whole CBT threshold), 0.37, 0.007
+
+    offseason = pd.Series([2020, 2022, 2023])
+    cap = np.log(0.2)
+    pred = bt.predict_aav(TooHigh(), None, offseason, cap)
+    assert (to_share(pred, offseason) <= 0.2 + 1e-12).all()
+    assert to_share(pred, offseason)[2] == pytest.approx(np.exp(-5.0))  # below the cap: unchanged
+
+
 @pytest.mark.parametrize("group", list(bt.GROUPS))
-def test_predictions_positive_and_right_length(group):
-    parts = bt.load_group(group)
-    X_tr = bt.build_X(parts["train"], group)
-    X_va = bt.align_categories(X_tr, bt.build_X(parts["val"], group))
-    for target in bt.TARGETS:
-        y = parts["train"][target].to_numpy(float)
-        model = bt.fit(X_tr, np.log(y) if target == "aav_nominal" else y, max_iter=20)
-        pred = bt.predict(model, X_va, target)
-        assert pred.shape == (len(X_va),)
-        assert (pred > 0).all()
+def test_real_predictions_positive_and_capped(group):
+    parts, X_tr, X_va = _prepared(group)
+    y = bt.log_share(parts["train"])
+    pred = bt.predict_aav(bt.fit_aav(X_tr, y, max_iter=20), X_va, parts["val"]["offseason"], y.max())
+    assert pred.shape == (len(X_va),) and (pred > 0).all()
+    assert (np.log(to_share(pred, parts["val"]["offseason"])) <= y.max() + 1e-12).all()
+    classes = bt.fit_years(X_tr, parts["train"]["years_new"], max_iter=20).predict(X_va)
+    assert set(classes) <= {0, 1, 2, 3, 4}
 
 
-def test_score_years():
-    m = bt.score_years([1, 2, 6], [1.2, 3.4, 8.0])
-    assert m["years_mae"] == pytest.approx((0.2 + 1.4 + 2.0) / 3)
-    assert m["exact_year"] == pytest.approx(1 / 3)
-    assert m["years_bucket_accuracy"] == pytest.approx(2 / 3)  # 6 and 8 are both in the 6+ class
+def test_score_years_uses_class_midpoints():
+    m = bt.score_years([1, 2, 6], [0, 2, 4])  # predicted classes 1, 3, 6+ years -> midpoints 1, 3, 7
+    assert m["years_mae"] == pytest.approx((0 + 1 + 1) / 3)
+    assert m["years_bucket_accuracy"] == pytest.approx(2 / 3)
+    assert m["years_balanced_accuracy"] == pytest.approx(2 / 3)
 
 
 EXPECTED_BUCKET = {
@@ -49,7 +87,7 @@ EXPECTED_BUCKET = {
 
 @pytest.mark.parametrize("group", list(bt.GROUPS))
 def test_position_bucket_covers_every_position_in_the_data(group):
-    df = pd.read_csv(bt.ROOT / "data/processed" / f"contracts_features_{group}.csv")
+    df = pd.read_csv(DATA / f"contracts_features_{group}.csv")
     firsts = set(df["position"].astype(str).str.split("/").str[0].str.strip())
     assert firsts == set(EXPECTED_BUCKET[group])  # a new position value must be mapped on purpose
     for pos in df["position"].unique():
@@ -62,21 +100,16 @@ def test_position_bucket_rejects_unknown_hitter_position():
         bt.position_bucket("XX", "hitters")
 
 
-def test_results_csv_columns(tmp_path, monkeypatch):
+def test_results_csv_in_d19_order(tmp_path, monkeypatch):
     monkeypatch.setattr(bt, "ROOT", tmp_path)
     monkeypatch.setattr(bt, "GRID", {"learning_rate": [0.1], "max_depth": [3], "max_iter": [20]})
-    data = tmp_path / "data/processed"
-    data.mkdir(parents=True)
+    (tmp_path / "data/processed").mkdir(parents=True)
     for g in bt.GROUPS:
-        (data / f"contracts_features_{g}.csv").write_bytes(
-            (pathlib.Path(__file__).parents[1] / "data/processed" / f"contracts_features_{g}.csv").read_bytes())
+        name = f"contracts_features_{g}.csv"
+        (tmp_path / "data/processed" / name).write_bytes((DATA / name).read_bytes())
     bt.main()
     out = pd.read_csv(tmp_path / "results/boosted_tree_val_metrics.csv")
-    assert list(out.columns) == [
-        "model", "group", "n_train", "n_val",
-        "within_5pct", "within_10pct", "mae_usd_m", "mae_log", "r2_log",
-        "years_bucket_accuracy", "years_mae", "exact_year",
-        "aav_learning_rate", "aav_max_depth", "aav_max_iter",
-        "years_learning_rate", "years_max_depth", "years_max_iter"]
+    assert list(out.columns) == EXPECTED_COLUMNS
+    assert "years_balanced_accuracy" in out.columns and out["years_balanced_accuracy"].between(0, 1).all()
     assert list(out["group"]) == ["hitters", "pitchers"]
     assert (out["model"] == "boosted_tree").all()
