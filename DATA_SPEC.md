@@ -1,6 +1,6 @@
 # Data Specification: MLB Contract Dataset
 
-Decisions agreed by the team on 2026-11-10.
+Decisions agreed by the team on 2026-11-10; performance features added 2026-11-17 (D-15 to D-17).
 
 ## What counts as a row
 One row per **guaranteed major-league contract signed after a player's rookie deal**, from the
@@ -19,11 +19,11 @@ the signed year minus 1 (51 rows; `date_source` records which).
 - All extensions, tagged by `contract_type`:
   `free_agent`, `extension_pre_arb`, `extension_arb`, `extension_veteran` (Spotrac's three extension types)
 
-## Excluded (kept in `contracts_dropped.csv` with a reason, so the filtering is auditable)
+## Excluded (kept in `data/processed/prepare_dropped.csv` with a reason, so the filtering is auditable)
 - Arbitration settlements and awards
 - Minor-league deals and non-roster invitations
 - International signings with no MLB history (NPB/KBO/CPBL etc.). Spotrac's free-agent `From` column shows JPN, KOR, MEX, DOM, OS for these.
-- Extensions of players with no MLB history (`no_mlb_history`, mostly 19-21 year-old prospects). Kept in `contracts_dropped.csv` for case studies. Needs the Chadwick `mlb_played_first` check.
+- Extensions of players with no MLB history (`no_mlb_history`, mostly 19-21 year-old prospects). Kept in `prepare_dropped.csv` for case studies.
 - Free-agent rows with a $0 value (164 found, treated as minor-league or unknown terms)
 - Rookie / pre-arbitration standard contracts
 
@@ -46,7 +46,7 @@ Flags (`has_opt_out`, `has_deferral`, `has_incentives`) are stored but not used 
 - `seasons_in_window` = number of seasons used. Contracts with none are dropped and logged in
   `data/processed/features_dropped.csv` (11 rows).
 - Outputs: `data/processed/contracts_features_hitters.csv` (862), `contracts_features_pitchers.csv` (1,031).
-- Plus: age, position group, service time, contract_type, is_resign.
+- Plus: age, position group, contract_type, is_resign, previous-contract features. (`service_years_at_signing` is still empty, so it is not a usable feature.)
 - Hitters and pitchers are modelled separately. Two-way players: Ohtani excluded (D-08).
 
 ## Split (by offseason)
@@ -90,7 +90,11 @@ Minimum-salary floors and the follow-up rule were verified (D-07). Name matching
 1. (Resolved) The 2020 shortened season: counting stats scaled to 162 games, D-15.
 2. (Resolved) Two-way players: Ohtani excluded, D-08.
 3. Pre-arb extensions are a small group. Check counts before deciding whether to model contract_type as a feature or as separate models.
-4. Spotrac data licensing (D-13): raw Spotrac files stay out of the public repo until decided.
+4. (Resolved) Spotrac data licensing (D-13): raw Spotrac files stay out of the repo; the cleaned dataset is published with the professor's approval.
+5. `service_years_at_signing`, `has_opt_out`, `has_incentives` are 100% empty: fill, derive or drop.
+6. `position` needs cleaning into buckets (C, IF, OF, DH, SP, RP) before modeling.
+7. Four same-class free-agent pairs (McGowan 2014, Murphy 2015, Detwiler 2020, Guillorme 2023): keep or drop.
+8. The Baseball-Reference season tables used by `build_features.py` are not committed; the scrape must be re-run to rebuild the feature files.
 
 ## Collection (Spotrac, scraped Nov 10 2026)
 `src/scrape_spotrac_console.js` runs in the browser console on a Spotrac MLB page (about 60 requests,

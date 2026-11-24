@@ -12,7 +12,7 @@ Final project for *Artificial Neural Networks and Deep Learning* by Kyle Vogel, 
 | Stage | State |
 | --- | --- |
 | Contract data collected, cleaned, validated | Done |
-| Performance features (3 completed seasons of WAR, PA/IP, wRC+/FIP) | Code ready; needs a run on a machine with FanGraphs access (`src/fetch_stats.py`) |
+| Performance features from Baseball-Reference (3-season averages of WAR plus OPS+/BA/R for hitters, ERA+/FIP/WHIP for pitchers, and award flags) | Done: 862 hitter and 1,031 pitcher rows (11 contracts with no MLB season in the window are dropped and logged) |
 | Train / validation / test split and evaluation metrics | Done (`src/splits.py`, `src/metrics.py`) |
 | Linear and boosted-tree baselines | Next |
 | Neural network | After baselines |
@@ -42,10 +42,18 @@ mistakes the AI assistant made and how we caught them. Every dropped row is logg
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m pytest -q tests          # data validation and unit tests
-python src/fetch_stats.py          # needs internet access to FanGraphs; writes data/processed/features_*.csv
 ```
 
-To rebuild the dataset from the raw Spotrac scrape, see the pipeline order in [`AGENTS.md`](AGENTS.md).
+To rebuild the performance features:
+
+```bash
+python src/scrape_bref_stats.py    # downloads Baseball-Reference season tables to data/raw/ (needs internet)
+python src/build_features.py       # writes data/processed/contracts_features_hitters.csv and _pitchers.csv
+```
+
+The Baseball-Reference season tables are not committed, so the feature files cannot be rebuilt without the scrape step.
+`src/fetch_stats.py` is the earlier FanGraphs approach, replaced by the Baseball-Reference features (D-15) and no longer used.
+To rebuild the contract dataset from the raw Spotrac scrape, see the pipeline order in [`AGENTS.md`](AGENTS.md).
 
 ## Repo layout
 
@@ -53,7 +61,7 @@ To rebuild the dataset from the raw Spotrac scrape, see the pipeline order in [`
 src/        pipeline (scrape, clean, features), splits and metrics; models will live here
 tests/      pytest tests, including regression tests for data-quality fixes
 data/raw/   hand-kept, source-cited correction files (raw Spotrac scrapes are git-ignored)
-data/processed/   cleaned dataset, drop/review logs, features
+data/processed/   cleaned dataset, drop/review logs, feature datasets (hitters, pitchers)
 blog_figures/     figures for the write-up
 ```
 
@@ -72,7 +80,7 @@ Planning and parts of the data pipeline were done with Claude (Anthropic). AI-as
 
 Contract terms were collected from [Spotrac](https://www.spotrac.com), checked against MLB.com, MLB Trade
 Rumors, Baseball-Reference, FanGraphs and news reports, and joined to player IDs from the
-[Chadwick Bureau register](https://github.com/chadwickbureau/register). Performance statistics come from
-FanGraphs via [pybaseball](https://github.com/jldbc/pybaseball). The raw Spotrac pages are not in this
+[Chadwick Bureau register](https://github.com/chadwickbureau/register). Performance statistics and awards come from
+[Baseball-Reference](https://www.baseball-reference.com) season tables. The raw Spotrac pages are not in this
 repo (personal-use terms); the cleaned dataset is published with the permission of our course instructor.
 If a data owner objects, we will remove the file.
