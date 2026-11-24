@@ -2,7 +2,9 @@
 
 Early-stops on validation loss and keeps the best epoch's weights. Writes
   results/nn_<group>_val_predictions.csv
-  results/nn_<group>_val_metrics.json   (metrics.report on AAV in $M, plus length accuracy and MAE)
+  results/nn_val_metrics.csv   one row per group, the shared format of DECISIONS.md D-18:
+                               model, group, n_train, n_val, metrics.report() on AAV in $M,
+                               years_bucket_accuracy, years_mae (plus seed and epochs)
 The test classes are never loaded: nn_data.load_group only returns train and validation.
 
 Usage: python src/train_nn.py --group hitters [--seed 0] [--epochs 500] [--patience 30]
@@ -75,6 +77,15 @@ def evaluate(data: GroupData, aav_pred: np.ndarray, bucket_pred: np.ndarray) -> 
     return out
 
 
+def write_metrics_row(path: Path, row: dict) -> None:
+    """Add or replace this group's row in the shared-format metrics CSV."""
+    table = pd.read_csv(path) if path.exists() else pd.DataFrame()
+    if len(table):
+        table = table[table["group"] != row["group"]]
+    table = pd.concat([table, pd.DataFrame([row])], ignore_index=True).sort_values("group")
+    table.to_csv(path, index=False)
+
+
 def main(argv=None) -> dict:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--group", choices=["hitters", "pitchers"], required=True)
@@ -87,15 +98,15 @@ def main(argv=None) -> dict:
     data = load_group(args.group)
     model, history = train(data, seed=args.seed, epochs=args.epochs, patience=args.patience)
     aav_pred, bucket_pred = predict(model, data.X_val)
-    metrics = evaluate(data, aav_pred, bucket_pred)
-    metrics.update(group=args.group, seed=args.seed, best_epoch=int(np.argmin([h["val_loss"] for h in history])),
-                   epochs_run=len(history), n_train=len(data.X_train), n_val=len(data.X_val))
+    metrics = {"model": "nn", "group": args.group, "n_train": len(data.X_train), "n_val": len(data.X_val),
+               **evaluate(data, aav_pred, bucket_pred), "seed": args.seed,
+               "best_epoch": int(np.argmin([h["val_loss"] for h in history])), "epochs_run": len(history)}
 
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     preds = data.meta_val.assign(aav_pred=aav_pred, years_bucket=data.y_bucket_val, years_bucket_pred=bucket_pred)
     preds.to_csv(out / f"nn_{args.group}_val_predictions.csv", index=False)
-    (out / f"nn_{args.group}_val_metrics.json").write_text(json.dumps(metrics, indent=2))
+    write_metrics_row(out / "nn_val_metrics.csv", metrics)
     print(json.dumps(metrics, indent=2))
     return metrics
 

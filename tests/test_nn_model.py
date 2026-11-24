@@ -46,5 +46,11 @@ def test_main_writes_validation_only(tmp_path):
     main(["--group", "pitchers", "--epochs", "3", "--out-dir", str(tmp_path)])
     preds = pd.read_csv(tmp_path / "nn_pitchers_val_predictions.csv")
     assert len(preds) == 185 and preds["offseason"].between(2022, 2023).all()  # never test classes
-    metrics = json.loads((tmp_path / "nn_pitchers_val_metrics.json").read_text())
-    assert metrics["n_val"] == 185
+    main(["--group", "hitters", "--epochs", "3", "--out-dir", str(tmp_path)])
+    main(["--group", "pitchers", "--epochs", "3", "--out-dir", str(tmp_path)])  # rerun replaces its row
+    table = pd.read_csv(tmp_path / "nn_val_metrics.csv")
+    assert table["group"].tolist() == ["hitters", "pitchers"]
+    assert table.set_index("group").loc["pitchers", "n_val"] == 185
+    shared = ["model", "group", "n_train", "n_val", "within_5pct", "within_10pct", "mae_usd_m",
+              "mae_log", "r2_log", "years_bucket_accuracy", "years_mae"]  # DECISIONS.md D-18
+    assert table.columns[:len(shared)].tolist() == shared
