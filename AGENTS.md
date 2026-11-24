@@ -38,3 +38,6 @@ functions, no notebooks-only logic (notebooks may call `src/`).
 - Every dropped row must be logged with a reason.
 - No API keys or credentials in the repo.
 - Follow `.github/` templates: one issue, one PR, under about 300 changed lines, disclose AI use.
+- Every model is built twice: once trained only on the hitter data
+  (`data/processed/contracts_features_hitters.csv`) and once only on the pitcher data
+  (`contracts_features_pitchers.csv`), never on both together (D-09). Report results per group.
