@@ -1,28 +1,31 @@
-"""Boosted-tree baseline for contract length and nominal AAV (issue #23, D-09).
+"""Boosted-tree baseline for nominal AAV and contract length (issues #23, #36; D-18, D-19).
 
-Four HistGradientBoostingRegressor models: hitters and pitchers, each predicting `years_new`
-and `aav_nominal`. AAV is fit on log(AAV) and converted back to $M for scoring. Settings come
-from a small fixed grid, chosen on validation (2022-2023); every model is fit on train
-(2014-2021) only. The test classes (2024-2025) are never loaded here.
+Hitters and pitchers are modelled separately. For each group:
+- AAV: HistGradientBoostingRegressor on log(AAV share of the CBT threshold) (D-19a). Predicted log
+  shares are capped at the largest training log share for the group (D-19b), converted back to $M
+  with salary_scale.from_share, and scored on nominal $M with metrics.report().
+- Length: HistGradientBoostingClassifier (class_weight="balanced") on metrics.years_bucket classes
+  1 / 2 / 3 / 4-5 / 6+ (D-19c), scored with metrics.years_class_report and a midpoint years_mae.
 
-The feature list is FEATURES below. It is meant to be easy to change so every model can use the
-same inputs; columns in EXCLUDED must never be features (they describe the new contract itself).
+Settings come from a fixed grid, chosen on validation (2022-2023): AAV by lowest mae_log, length by
+highest years_balanced_accuracy. Every model is fit on train (2014-2021) only. The test classes
+(2024-2025) are never loaded here.
 
-Usage: python src/boosted_tree.py   -> results/boosted_tree_val_metrics.csv (format: D-18)
+Usage: python src/boosted_tree.py   -> results/boosted_tree_val_metrics.csv (format: D-19)
 """
 from itertools import product
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 
-from metrics import report
+from metrics import report, years_bucket, years_class_report
+from salary_scale import from_share, to_share
 from splits import split_by_group
 
 ROOT = Path(__file__).parents[1]
 GROUPS = {"hitters": "hitter", "pitchers": "pitcher"}
-TARGETS = ("years_new", "aav_nominal")
 
 # Shared input list (D-18). service_years_at_signing is not used: it is blank in every row.
 COMMON = ["age_at_signing", "contract_type", "position_bucket", "seasons_in_window",
@@ -43,14 +46,14 @@ EXCLUDED = {"years_new", "total_value_nominal", "aav_nominal", "aav_adjusted", "
             "has_incentives", "team", "is_resign", "player_name", "mlb_id", "fg_id", "bbref_id",
             "source_url", "notes", "signing_date", "offseason", "prev_team"}
 
-GRID = {"learning_rate": [0.05, 0.1], "max_depth": [3, 5], "max_iter": [100, 300]}
-# Same length classes as the neural network (PR #24): 1, 2, 3, 4-5, 6+ years.
-YEAR_BUCKET_EDGES = [1.5, 2.5, 3.5, 5.5]
+GRID = {"learning_rate": [0.03, 0.05, 0.1], "max_depth": [2, 3, 4], "max_iter": [300, 600]}
+SEED = 0
+# Class midpoints in years for 1 / 2 / 3 / 4-5 / 6+, as the network uses (D-18).
+YEAR_BUCKET_MIDPOINTS = np.array([1.0, 2.0, 3.0, 4.5, 7.0])
 METRIC_COLUMNS = ["within_5pct", "within_10pct", "mae_usd_m", "mae_log", "r2_log",
-                  "years_bucket_accuracy", "years_mae"]
+                  "years_bucket_accuracy", "years_balanced_accuracy", "years_mae"]
 SETTING_COLUMNS = [f"{t}_{k}" for t in ("aav", "years") for k in GRID]
-RESULT_COLUMNS = ["model", "group", "n_train", "n_val", *METRIC_COLUMNS, "exact_year", *SETTING_COLUMNS]
-SHORT = {"aav_nominal": "aav", "years_new": "years"}
+RESULT_COLUMNS = ["model", "group", "n_train", "n_val", *METRIC_COLUMNS, *SETTING_COLUMNS]
 
 
 def load_group(group: str) -> dict[str, pd.DataFrame]:
@@ -75,10 +78,7 @@ def build_X(df: pd.DataFrame, group: str) -> pd.DataFrame:
     df = df.assign(position_bucket=[position_bucket(p, group) for p in df["position"]])
     X = df[FEATURES[group]].copy()
     for col in X.columns:
-        if col in CATEGORICAL:
-            X[col] = X[col].astype("category")
-        else:
-            X[col] = X[col].astype(float)
+        X[col] = X[col].astype("category") if col in CATEGORICAL else X[col].astype(float)
     return X
 
 
@@ -90,49 +90,59 @@ def align_categories(X_train: pd.DataFrame, X_other: pd.DataFrame) -> pd.DataFra
     return out
 
 
-def fit(X: pd.DataFrame, y: np.ndarray, **params) -> HistGradientBoostingRegressor:
-    model = HistGradientBoostingRegressor(categorical_features="from_dtype", random_state=0, **params)
-    return model.fit(X, y)
+def log_share(df: pd.DataFrame) -> np.ndarray:
+    """AAV target: log of nominal AAV as a share of the class's CBT threshold (D-19a)."""
+    return np.log(to_share(df["aav_nominal"], df["offseason"]))
 
 
-def score_years(y_true, y_pred) -> dict[str, float]:
-    """MAE in years, exact-year share (rounded), and length-class accuracy."""
-    y_true, y_pred = np.asarray(y_true, float), np.asarray(y_pred, float)
-    rounded = np.clip(np.rint(y_pred), 1, None)
-    return {"years_mae": float(np.abs(y_pred - y_true).mean()),
-            "exact_year": float((rounded == y_true).mean()),
-            "years_bucket_accuracy": float((np.digitize(rounded, YEAR_BUCKET_EDGES)
-                                 == np.digitize(y_true, YEAR_BUCKET_EDGES)).mean())}
+def fit_aav(X: pd.DataFrame, y_log_share: np.ndarray, **params) -> HistGradientBoostingRegressor:
+    model = HistGradientBoostingRegressor(categorical_features="from_dtype", random_state=SEED, **params)
+    return model.fit(X, y_log_share)
 
 
-def predict(model, X: pd.DataFrame, target: str) -> np.ndarray:
-    pred = model.predict(X)
-    return np.exp(pred) if target == "aav_nominal" else np.clip(pred, 1, None)
+def predict_aav(model, X: pd.DataFrame, offseason, max_log_share: float) -> np.ndarray:
+    """Predicted AAV in $M: log share capped at the training maximum (D-19b), then back to $M."""
+    capped = np.minimum(model.predict(X), max_log_share)
+    return from_share(np.exp(capped), offseason)
 
 
-def score(target: str, y_true, y_pred) -> dict[str, float]:
-    return report(y_true, y_pred) if target == "aav_nominal" else score_years(y_true, y_pred)
+def fit_years(X: pd.DataFrame, years, **params) -> HistGradientBoostingClassifier:
+    model = HistGradientBoostingClassifier(categorical_features="from_dtype", class_weight="balanced",
+                                           random_state=SEED, **params)
+    return model.fit(X, years_bucket(years))
+
+
+def score_years(years_true, bucket_pred) -> dict[str, float]:
+    """Class accuracy, balanced accuracy, and MAE of the predicted class midpoint in years."""
+    bucket_pred = np.asarray(bucket_pred, dtype=int)
+    mae = float(np.abs(YEAR_BUCKET_MIDPOINTS[bucket_pred] - np.asarray(years_true, float)).mean())
+    return {**years_class_report(years_true, bucket_pred), "years_mae": mae}
+
+
+def _grid():
+    for values in product(*GRID.values()):
+        yield dict(zip(GRID, values))
 
 
 def tune(group: str) -> dict:
-    """Pick grid settings on validation for both targets of one group; one D-18 result row."""
+    """Pick grid settings on validation for both targets of one group; one D-19 result row."""
     parts = load_group(group)
-    X_tr = build_X(parts["train"], group)
-    X_va = align_categories(X_tr, build_X(parts["val"], group))
-    row = {"model": "boosted_tree", "group": group, "n_train": len(X_tr), "n_val": len(X_va)}
-    for target in TARGETS:
-        y_tr, y_va = parts["train"][target].to_numpy(float), parts["val"][target].to_numpy(float)
-        fit_y = np.log(y_tr) if target == "aav_nominal" else y_tr
-        key = "mae_log" if target == "aav_nominal" else "years_mae"
-        best = None
-        for values in product(*GRID.values()):
-            params = dict(zip(GRID, values))
-            metrics = score(target, y_va, predict(fit(X_tr, fit_y, **params), X_va, target))
-            if best is None or metrics[key] < best[1][key]:
-                best = (params, metrics)
-        row.update(best[1])
-        row.update({f"{SHORT[target]}_{k}": v for k, v in best[0].items()})
-    return row
+    train, val = parts["train"], parts["val"]
+    X_tr = build_X(train, group)
+    X_va = align_categories(X_tr, build_X(val, group))
+    y_tr = log_share(train)
+    cap = float(y_tr.max())
+
+    aav = min(((p, report(val["aav_nominal"], predict_aav(fit_aav(X_tr, y_tr, **p), X_va,
+                                                            val["offseason"], cap)))
+               for p in _grid()), key=lambda r: r[1]["mae_log"])
+    years = max(((p, score_years(val["years_new"], fit_years(X_tr, train["years_new"], **p).predict(X_va)))
+                 for p in _grid()), key=lambda r: r[1]["years_balanced_accuracy"])
+
+    return {"model": "boosted_tree", "group": group, "n_train": len(X_tr), "n_val": len(X_va),
+            **aav[1], **years[1],
+            **{f"aav_{k}": v for k, v in aav[0].items()},
+            **{f"years_{k}": v for k, v in years[0].items()}}
 
 
 def main() -> None:
