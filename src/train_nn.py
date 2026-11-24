@@ -12,6 +12,7 @@ Writes
 The test classes are never loaded: nn_data.load_group only returns train and validation.
 
 Usage: python src/train_nn.py --group hitters [--seeds 5] [--epochs 500] [--patience 30] [--no-class-weights]
+       python src/train_nn.py --group hitters --tuned   # settings from results/nn_best_settings.json (#32)
 """
 import argparse
 import copy
@@ -137,13 +138,17 @@ def main(argv=None) -> dict:
     p.add_argument("--epochs", type=int, default=500)
     p.add_argument("--patience", type=int, default=30)
     p.add_argument("--no-class-weights", action="store_true")
+    p.add_argument("--tuned", action="store_true", help="use results/nn_best_settings.json for this group")
     p.add_argument("--out-dir", default=str(ROOT / "results"))
     args = p.parse_args(argv)
 
+    settings = {"weighted": not args.no_class_weights}
+    if args.tuned:
+        best = json.loads((ROOT / "results/nn_best_settings.json").read_text())[args.group]
+        settings = {**best, "hidden": tuple(best["hidden"])}
     data = load_group(args.group)
-    per_seed, preds = run_seeds(data, list(range(args.seeds)), epochs=args.epochs, patience=args.patience,
-                                weighted=not args.no_class_weights)
-    row = summarise(args.group, data, per_seed)
+    per_seed, preds = run_seeds(data, list(range(args.seeds)), epochs=args.epochs, patience=args.patience, **settings)
+    row = {**summarise(args.group, data, per_seed), "tuned": args.tuned}
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     preds.to_csv(out / f"nn_{args.group}_val_predictions.csv", index=False)
