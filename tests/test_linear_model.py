@@ -66,3 +66,13 @@ def test_no_leakage_columns():
              "at_league_minimum", "has_deferral", "has_opt_out", "has_incentives"}
     for group in lm.GROUPS:
         assert not leaky & set(lm.feature_columns(group))
+
+
+def test_each_group_trained_only_on_its_own_rows(data, monkeypatch):
+    seen = []
+    real_fit = lm.fit_one
+    monkeypatch.setattr(lm, "fit_one", lambda tr, va, g, t: seen.append((g, tr, va)) or real_fit(tr, va, g, t))
+    lm.fit_linear_models(data)
+    assert {g for g, _, _ in seen} == set(lm.GROUPS)
+    for group, tr, va in seen:
+        assert set(tr.pos_group) == {group} and set(va.pos_group) == {group}
