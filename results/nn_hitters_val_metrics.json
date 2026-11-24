@@ -1,0 +1,15 @@
+{
+  "within_5pct": 0.06918238993710692,
+  "within_10pct": 0.12578616352201258,
+  "mae_usd_m": 3.831937689904147,
+  "mae_log": 0.5857719384558807,
+  "r2_log": 0.5379280968604654,
+  "years_bucket_accuracy": 0.7044025157232704,
+  "years_mae": 0.6981132075471698,
+  "group": "hitters",
+  "seed": 0,
+  "best_epoch": 71,
+  "epochs_run": 102,
+  "n_train": 557,
+  "n_val": 159
+}
