@@ -121,3 +121,98 @@ def test_committed_results_csv_columns():
     out = pd.read_csv(lm.RESULTS)
     assert list(out.columns) == lm.METRIC_COLUMNS
     assert list(out.group) == ["hitters", "pitchers"]
+
+
+# --- D-19 linear model (#38) ---
+from salary_scale import from_share, to_share
+
+
+@pytest.fixture(scope="module")
+def data_d19(data):
+    """The made-up data above, plus one hitter with a previous contract."""
+    out = {g: df.copy() for g, df in data.items()}
+    out["hitter"].loc[1, ["has_prev_contract", "prev_contract_years", "prev_contract_aav",
+                          "years_since_prev_contract"]] = [True, 3, 12.0, 3]
+    return out
+
+
+@pytest.fixture(scope="module")
+def fitted_d19(data_d19):
+    return lm.fit_linear_models_d19(data_d19)
+
+
+def test_d19_params_from_grids(fitted_d19):
+    assert set(fitted_d19) == set(lm.GROUPS)
+    for fit in fitted_d19.values():
+        assert fit["alpha_aav"] in lm.ALPHAS_D19 and fit["C_years"] in lm.CS_D19
+
+
+def test_d19_share_target_converts_back_to_usd_m(fitted_d19, data_d19):
+    for group in lm.GROUPS:
+        train, val = lm.train_val_d19(data_d19[group], group)
+        assert np.allclose(from_share(np.exp(lm.log_share(train)), train.offseason), train.aav_nominal)
+        fit = fitted_d19[group]
+        rows = pd.concat([train, val])
+        aav = lm.predict_aav_d19(fit["aav_model"], rows, fit["cap"])
+        log_pred = fit["aav_model"].predict(rows[lm.feature_columns_d19(group)])
+        assert np.allclose(aav, from_share(np.exp(np.minimum(log_pred, fit["cap"])), rows.offseason))
+        assert np.corrcoef(np.log(rows.aav_nominal), np.log(aav))[0, 1] > 0.9  # learns the made-up signal in $M
+
+
+def test_d19_predictions_never_exceed_training_max_share(fitted_d19, data_d19):
+    for group in lm.GROUPS:
+        train, val = lm.train_val_d19(data_d19[group], group)
+        fit = fitted_d19[group]
+        assert fit["cap"] == pytest.approx(lm.log_share(train).max())
+        extreme = val.assign(war_3yr=1000.0)  # far outside training: uncapped, the prediction would explode
+        share = to_share(lm.predict_aav_d19(fit["aav_model"], extreme, fit["cap"]), extreme.offseason)
+        assert (share <= np.exp(fit["cap"]) + 1e-12).all()
+
+
+def test_d19_length_is_a_class_prediction(fitted_d19, data_d19):
+    for group in lm.GROUPS:
+        _, val = lm.train_val_d19(data_d19[group], group)
+        assert set(fitted_d19[group]["years_model"].predict(val[lm.feature_columns_d19(group)])) <= set(range(5))
+
+
+def test_d19_log1p_prev_contract_aav(data_d19):
+    train, _ = lm.train_val_d19(data_d19["hitter"], "hitter")
+    assert train.loc[1, "log1p_prev_contract_aav"] == pytest.approx(np.log1p(12.0))
+    assert (train.loc[~train.has_prev_contract.astype(bool), "log1p_prev_contract_aav"] == 0).all()
+    for group in lm.GROUPS:
+        cols = lm.feature_columns_d19(group)
+        assert "log1p_prev_contract_aav" in cols and "prev_contract_aav" not in cols and "is_resign" not in cols
+
+
+def test_d19_test_classes_never_used(data_d19, monkeypatch):
+    seen = []
+    real_fit = lm.fit_group_d19
+    monkeypatch.setattr(lm, "fit_group_d19", lambda tr, va, g: seen.append((g, tr, va)) or real_fit(tr, va, g))
+    lm.fit_linear_models_d19(data_d19)
+    lm.val_metrics_d19(data_d19)
+    assert {g for g, _, _ in seen} == set(lm.GROUPS)
+    for group, tr, va in seen:
+        assert tr.offseason.max() <= 2021 and va.offseason.between(2022, 2023).all()
+        assert set(tr.pos_group) == {group} and set(va.pos_group) == {group}
+
+
+def test_d19_metrics_ignore_test_rows(data_d19):
+    without_test = {g: df[df.offseason <= 2023] for g, df in data_d19.items()}
+    poisoned = {g: df.assign(aav_nominal=np.where(df.offseason >= 2024, 999.0, df.aav_nominal),
+                             years_new=np.where(df.offseason >= 2024, 15, df.years_new))
+                for g, df in data_d19.items()}
+    pd.testing.assert_frame_equal(lm.val_metrics_d19(without_test), lm.val_metrics_d19(poisoned))
+
+
+def test_d19_val_metrics_columns(data_d19):
+    out = lm.val_metrics_d19(data_d19)
+    assert list(out.columns) == lm.METRIC_COLUMNS_D19
+    assert lm.METRIC_COLUMNS_D19[9:12] == ["years_bucket_accuracy", "years_balanced_accuracy", "years_mae"]
+    assert list(out.group) == ["hitters", "pitchers"] and set(out.model) == {"linear"}
+    assert out.years_balanced_accuracy.between(0, 1).all()
+
+
+def test_d19_committed_results_csv_columns():
+    out = pd.read_csv(lm.RESULTS_D19)
+    assert list(out.columns) == lm.METRIC_COLUMNS_D19 and "years_balanced_accuracy" in out.columns
+    assert list(out.group) == ["hitters", "pitchers"]
