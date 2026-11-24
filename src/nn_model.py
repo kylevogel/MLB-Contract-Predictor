@@ -1,7 +1,7 @@
 """Two-output MLP for contract prediction (issue #22).
 
 A shared trunk learns one representation of the player; two heads read it:
-  - aav head:   1 output, log nominal AAV (regression, MSE loss)
+  - aav head:   1 output, log AAV share of the luxury-tax threshold (regression, MSE loss; D-19)
   - years head: 5 logits, contract length class 1 / 2 / 3 / 4-5 / 6+ (cross-entropy loss)
 """
 import torch
@@ -26,8 +26,9 @@ class ContractMLP(nn.Module):
         return self.aav_head(z).squeeze(-1), self.years_head(z)
 
 
-def combined_loss(log_aav_pred, logits, log_aav_true, bucket_true, years_weight: float = 1.0):
-    """MSE on log AAV plus years_weight x cross-entropy on the length class."""
+def combined_loss(log_aav_pred, logits, log_aav_true, bucket_true, years_weight: float = 1.0,
+                  class_weights: torch.Tensor | None = None):
+    """MSE on the log-AAV target plus years_weight x (optionally class-weighted) cross-entropy on length."""
     mse = nn.functional.mse_loss(log_aav_pred, log_aav_true)
-    ce = nn.functional.cross_entropy(logits, bucket_true)
+    ce = nn.functional.cross_entropy(logits, bucket_true, weight=class_weights)
     return mse + years_weight * ce, mse, ce

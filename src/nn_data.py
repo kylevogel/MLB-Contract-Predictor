@@ -7,13 +7,16 @@ classes are returned: the test classes (2024-2025) are used once, at the very en
 Feature list agreed for all three models in DECISIONS.md D-18 (is_resign is not used: it is True
 for every extension and, for free agents, says where the player signed, which is part of the outcome).
 
+Targets: log AAV share of the luxury-tax threshold (D-19; `y_log_share_*`, the one the network fits),
+log nominal AAV (`y_log_aav_*`, kept for reference) and the length class (`y_bucket_*`).
+
 Scaling (mean / std) and the median used to fill missing stats come from train rows only,
 so nothing about the validation contracts leaks into the inputs.
 
 Usage:
     from nn_data import load_group
     data = load_group("hitters")
-    data.X_train, data.y_log_aav_train, data.y_bucket_train, data.feature_names
+    data.X_train, data.y_log_share_train, data.y_bucket_train, data.feature_names
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +24,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from metrics import years_bucket
+from salary_scale import to_share
 from splits import split_by_group
 
 ROOT = Path(__file__).parents[1]
@@ -36,17 +41,9 @@ BUCKETS = {"hitters": ["C", "IF", "OF", "DH"], "pitchers": ["SP", "RP"]}
 HITTER_BUCKET = {"C": "C", "1B": "IF", "2B": "IF", "3B": "IF", "SS": "IF",
                  "LF": "OF", "CF": "OF", "RF": "OF", "OF": "OF", "DH": "DH"}
 
-# Contract length classes: 1, 2, 3, 4-5, 6+ years -> 0..4. Midpoints turn a class back into years.
+# Contract length classes (metrics.years_bucket): 1, 2, 3, 4-5, 6+ years -> 0..4. Midpoints turn a class back into years.
 YEAR_BUCKET_LABELS = ["1", "2", "3", "4-5", "6+"]
 YEAR_BUCKET_MIDPOINTS = np.array([1.0, 2.0, 3.0, 4.5, 7.0])
-
-
-def years_bucket(years) -> np.ndarray:
-    """Map contract years to a class index: 1->0, 2->1, 3->2, 4-5->3, 6+->4."""
-    y = np.asarray(years, dtype=int)
-    if (y < 1).any():
-        raise ValueError("contract years must be at least 1")
-    return np.select([y == 1, y == 2, y == 3, y <= 5], [0, 1, 2, 3], default=4)
 
 
 def position_bucket(position: str, group: str) -> str:
@@ -89,6 +86,8 @@ class GroupData:
     X_val: np.ndarray
     y_log_aav_train: np.ndarray
     y_log_aav_val: np.ndarray
+    y_log_share_train: np.ndarray  # log(AAV / CBT threshold), the fitted target (D-19)
+    y_log_share_val: np.ndarray
     y_bucket_train: np.ndarray
     y_bucket_val: np.ndarray
     meta_train: pd.DataFrame  # player, offseason, actual targets: for writing predictions
@@ -120,6 +119,8 @@ def prepare(df: pd.DataFrame, group: str) -> GroupData:
         X_train=scale(f_train), X_val=scale(f_val),
         y_log_aav_train=np.log(train["aav_nominal"].to_numpy(dtype=np.float32)),
         y_log_aav_val=np.log(val["aav_nominal"].to_numpy(dtype=np.float32)),
+        y_log_share_train=np.log(to_share(train["aav_nominal"], train["offseason"])).astype(np.float32),
+        y_log_share_val=np.log(to_share(val["aav_nominal"], val["offseason"])).astype(np.float32),
         y_bucket_train=years_bucket(train["years_new"]),
         y_bucket_val=years_bucket(val["years_new"]),
         meta_train=train[meta_cols].reset_index(drop=True),

@@ -30,6 +30,7 @@ def test_position_bucket():
 def test_real_sizes_no_nans_no_leaky_columns(group, n_train, n_val):
     d = load_group(group)
     assert d.X_train.shape == (n_train, len(d.feature_names))
+    assert np.allclose(np.exp(d.y_log_share_val) * d.meta_val["offseason"].map({2022: 233, 2023: 237}), d.meta_val["aav_nominal"], rtol=1e-5)
     assert d.X_val.shape == (n_val, len(d.feature_names))
     assert not np.isnan(d.X_train).any() and not np.isnan(d.X_val).any()
     assert not set(LEAKY) & set(d.feature_names)
