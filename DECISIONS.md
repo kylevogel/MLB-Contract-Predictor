@@ -47,7 +47,7 @@ Status: **Decided** (user said so), **Default** (AI proposed, user did not objec
 2. Overlap check: done (D-14).
 3. Spotrac redistribution (D-13): resolved by the professor; keep the credit line in the README.
 4. League-minimum rows (68): user said they are fine; kept and flagged.
-5. `fetch_stats.py` has not been run on real data (FanGraphs is unreachable from the AI workspace); this is the first teammate task.
+5. (Resolved) `fetch_stats.py` (FanGraphs) was never run on real data; D-15 replaced it with Baseball-Reference features, and it was removed in #41.
 6. The saved Spotrac scraper scripts were consolidated from steps run in the browser and never re-run end to end. Not needed for the class work (the clean dataset is in the repo); only matters if the scrape must be reproduced.
 
 ## Sources used for verification
