@@ -28,6 +28,8 @@ Python 3.11+, pandas for data, PyTorch for models. Small functions, type hints o
 functions, no notebooks-only logic (notebooks may call `src/`).
 
 ## Rules
+- Read `DECISIONS.md` before starting any task. Follow every entry marked Decided, never reverse
+  one without the user's approval, and add an entry for any new data or modelling choice.
 - Never edit scraped files in `data/raw/`. The `manual_*.csv` files there are hand-kept, source-cited
   corrections; add a row with its evidence and a `DECISIONS.md` entry instead of changing code.
 - Split by offseason (train 2014-2021, validate 2022-2023, test 2024-2025). The test classes are
