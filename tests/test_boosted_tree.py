@@ -113,3 +113,37 @@ def test_results_csv_in_d19_order(tmp_path, monkeypatch):
     assert "years_balanced_accuracy" in out.columns and out["years_balanced_accuracy"].between(0, 1).all()
     assert list(out["group"]) == ["hitters", "pitchers"]
     assert (out["model"] == "boosted_tree").all()
+
+
+def test_v3_grid_unchanged_and_v4_adds_001():
+    assert bt.GRIDS[3] == {"learning_rate": [0.03, 0.05, 0.1], "max_depth": [2, 3, 4], "max_iter": [300, 600]}
+    assert bt.GRIDS[4] == {**bt.GRIDS[3], "learning_rate": [0.01, 0.03, 0.05, 0.1]}
+    assert bt.LATEST == 4 and bt.GRID == bt.GRIDS[4]
+
+
+def test_each_version_writes_its_own_d19_csv(tmp_path, monkeypatch):
+    monkeypatch.setattr(bt, "ROOT", tmp_path)
+    small = {"learning_rate": [0.1], "max_depth": [3], "max_iter": [20]}
+    monkeypatch.setattr(bt, "GRIDS", {3: small, 4: small})
+    monkeypatch.setattr(bt, "GRID", small)
+    (tmp_path / "data/processed").mkdir(parents=True)
+    for g in bt.GROUPS:
+        name = f"contracts_features_{g}.csv"
+        (tmp_path / "data/processed" / name).write_bytes((DATA / name).read_bytes())
+    bt.main(3)
+    bt.main(4)
+    for name in ("boosted_tree_v3_val_metrics.csv", "boosted_tree_val_metrics.csv"):
+        out = pd.read_csv(tmp_path / "results" / name)
+        assert list(out.columns) == EXPECTED_COLUMNS
+        assert list(out["group"]) == ["hitters", "pitchers"]
+
+
+def test_model_history_has_one_v4_row_per_group():
+    hist = pd.read_csv(pathlib.Path(__file__).parents[1] / "results/model_history.csv")
+    v4 = hist[(hist["model"] == "boosted_tree") & (hist["version"] == 4)]
+    assert sorted(v4["group"]) == ["hitters", "pitchers"]
+    latest = pd.read_csv(pathlib.Path(__file__).parents[1] / "results/boosted_tree_val_metrics.csv")
+    for _, row in latest.iterrows():
+        h = v4[v4["group"] == row["group"]].iloc[0]
+        assert h["r2_log"] == pytest.approx(row["r2_log"], abs=1e-4)
+        assert h["years_balanced_accuracy"] == pytest.approx(row["years_balanced_accuracy"], abs=1e-4)

@@ -1,4 +1,4 @@
-"""Boosted-tree baseline for nominal AAV and contract length (issues #23, #36; D-18, D-19).
+"""Boosted-tree baseline for nominal AAV and contract length (issues #23, #36, #45; D-18, D-19).
 
 Hitters and pitchers are modelled separately. For each group:
 - AAV: HistGradientBoostingRegressor on log(AAV share of the CBT threshold) (D-19a). Predicted log
@@ -7,12 +7,16 @@ Hitters and pitchers are modelled separately. For each group:
 - Length: HistGradientBoostingClassifier (class_weight="balanced") on metrics.years_bucket classes
   1 / 2 / 3 / 4-5 / 6+ (D-19c), scored with metrics.years_class_report and a midpoint years_mae.
 
-Settings come from a fixed grid, chosen on validation (2022-2023): AAV by lowest mae_log, length by
+Settings come from a fixed grid per model version (GRIDS), chosen on validation (2022-2023): AAV by lowest mae_log, length by
 highest years_balanced_accuracy. Every model is fit on train (2014-2021) only. The test classes
 (2024-2025) are never loaded here.
 
-Usage: python src/boosted_tree.py   -> results/boosted_tree_val_metrics.csv (format: D-19)
+Usage:
+    python src/boosted_tree.py               # latest version -> results/boosted_tree_val_metrics.csv
+    python src/boosted_tree.py --version 3   # earlier version -> results/boosted_tree_v3_val_metrics.csv
+Versions are kept, never replaced (AGENTS.md); every version is in results/model_history.csv.
 """
+import argparse
 from itertools import product
 from pathlib import Path
 
@@ -46,7 +50,13 @@ EXCLUDED = {"years_new", "total_value_nominal", "aav_nominal", "aav_adjusted", "
             "has_incentives", "team", "is_resign", "player_name", "mlb_id", "fg_id", "bbref_id",
             "source_url", "notes", "signing_date", "offseason", "prev_team"}
 
-GRID = {"learning_rate": [0.03, 0.05, 0.1], "max_depth": [2, 3, 4], "max_iter": [300, 600]}
+# One grid per model version. v3 (#37): D-19. v4 (#45): adds learning_rate 0.01 (v3 picked 0.03, the edge).
+GRIDS = {
+    3: {"learning_rate": [0.03, 0.05, 0.1], "max_depth": [2, 3, 4], "max_iter": [300, 600]},
+    4: {"learning_rate": [0.01, 0.03, 0.05, 0.1], "max_depth": [2, 3, 4], "max_iter": [300, 600]},
+}
+LATEST = max(GRIDS)
+GRID = GRIDS[LATEST]
 SEED = 0
 # Class midpoints in years for 1 / 2 / 3 / 4-5 / 6+, as the network uses (D-18).
 YEAR_BUCKET_MIDPOINTS = np.array([1.0, 2.0, 3.0, 4.5, 7.0])
@@ -119,13 +129,14 @@ def score_years(years_true, bucket_pred) -> dict[str, float]:
     return {**years_class_report(years_true, bucket_pred), "years_mae": mae}
 
 
-def _grid():
-    for values in product(*GRID.values()):
-        yield dict(zip(GRID, values))
+def _grid(grid: dict):
+    for values in product(*grid.values()):
+        yield dict(zip(grid, values))
 
 
-def tune(group: str) -> dict:
-    """Pick grid settings on validation for both targets of one group; one D-19 result row."""
+def tune(group: str, grid: dict | None = None) -> dict:
+    """Pick settings from `grid` (default: latest) on validation for one group; one D-19 result row."""
+    grid = GRID if grid is None else grid
     parts = load_group(group)
     train, val = parts["train"], parts["val"]
     X_tr = build_X(train, group)
@@ -135,9 +146,9 @@ def tune(group: str) -> dict:
 
     aav = min(((p, report(val["aav_nominal"], predict_aav(fit_aav(X_tr, y_tr, **p), X_va,
                                                             val["offseason"], cap)))
-               for p in _grid()), key=lambda r: r[1]["mae_log"])
+               for p in _grid(grid)), key=lambda r: r[1]["mae_log"])
     years = max(((p, score_years(val["years_new"], fit_years(X_tr, train["years_new"], **p).predict(X_va)))
-                 for p in _grid()), key=lambda r: r[1]["years_balanced_accuracy"])
+                 for p in _grid(grid)), key=lambda r: r[1]["years_balanced_accuracy"])
 
     return {"model": "boosted_tree", "group": group, "n_train": len(X_tr), "n_val": len(X_va),
             **aav[1], **years[1],
@@ -145,9 +156,15 @@ def tune(group: str) -> dict:
             **{f"years_{k}": v for k, v in years[0].items()}}
 
 
-def main() -> None:
-    results = pd.DataFrame([tune(g) for g in GROUPS])[RESULT_COLUMNS]
-    out = ROOT / "results/boosted_tree_val_metrics.csv"
+def results_path(version: int) -> Path:
+    name = "boosted_tree_val_metrics.csv" if version == LATEST else f"boosted_tree_v{version}_val_metrics.csv"
+    return ROOT / "results" / name
+
+
+def main(version: int = LATEST) -> None:
+    grid = GRID if version == LATEST else GRIDS[version]
+    results = pd.DataFrame([tune(g, grid) for g in GROUPS])[RESULT_COLUMNS]
+    out = results_path(version)
     out.parent.mkdir(exist_ok=True)
     results.to_csv(out, index=False)
     print(results.round(3).to_string(index=False))
@@ -155,4 +172,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--version", type=int, choices=sorted(GRIDS), default=LATEST)
+    main(parser.parse_args().version)
