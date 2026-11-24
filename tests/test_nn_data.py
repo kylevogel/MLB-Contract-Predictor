@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from nn_data import load_group, prepare, years_bucket, position_bucket, ROOT
 
-LEAKY = ["at_league_minimum", "aav_adjusted", "deferred_amount_m", "has_deferral", "offseason",
+LEAKY = ["is_resign", "at_league_minimum", "aav_adjusted", "deferred_amount_m", "has_deferral", "offseason",
          "service_years_at_signing", "has_opt_out", "has_incentives"]
 
 

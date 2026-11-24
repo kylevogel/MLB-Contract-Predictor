@@ -4,6 +4,9 @@ Turns data/processed/contracts_features_{hitters,pitchers}.csv into standardized
 the network. Hitters and pitchers are prepared separately (D-09). Only the train and validation
 classes are returned: the test classes (2024-2025) are used once, at the very end.
 
+Feature list agreed for all three models in DECISIONS.md D-18 (is_resign is not used: it is True
+for every extension and, for free agents, says where the player signed, which is part of the outcome).
+
 Scaling (mean / std) and the median used to fill missing stats come from train rows only,
 so nothing about the validation contracts leaks into the inputs.
 
@@ -24,7 +27,7 @@ ROOT = Path(__file__).parents[1]
 GROUPS = {"hitters": "hitter", "pitchers": "pitcher"}
 
 CONTRACT_TYPES = ["free_agent", "extension_pre_arb", "extension_arb", "extension_veteran"]
-COMMON = ["age_at_signing", "is_resign", "seasons_in_window",
+COMMON = ["age_at_signing", "seasons_in_window",
           "won_mvp", "won_cy_young", "won_gold_glove", "won_silver_slugger"]
 PREV = ["has_prev_contract", "prev_contract_years", "log_prev_contract_aav", "years_since_prev_contract"]
 STATS = {"hitters": ["war_3yr", "r_3yr", "ba_3yr", "ops_plus_3yr"],
@@ -63,6 +66,8 @@ def build_frame(df: pd.DataFrame, group: str) -> pd.DataFrame:
         out[c] = df[c].astype(float)
     for t in CONTRACT_TYPES:
         out[f"type_{t}"] = (df["contract_type"] == t).astype(float)
+    for t in CONTRACT_TYPES:  # previous contract's type; all zeros when there is none
+        out[f"prev_type_{t}"] = (df["prev_contract_type"] == t).astype(float)
     # Previous contract: has_prev_contract is the mask; the rest are 0 when there is none (D-10).
     has_prev = df["has_prev_contract"].astype(bool)
     out["has_prev_contract"] = has_prev.astype(float)
