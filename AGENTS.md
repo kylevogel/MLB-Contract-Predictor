@@ -11,16 +11,27 @@ is a blog post plus this repo.
 - `tests/` pytest tests
 - `data/raw/` source data. Never edit by hand.
 - `data/processed/` generated datasets and drop/review logs
+- `results/` validation metrics per model, tuning tables, and `model_history.csv`
 - `blog_figures/` every figure used in the blog post, with the code that makes it
 - `DATA_SPEC.md` the data rules. Read before touching the data code.
 
 ## Run and test
 ```
-pip install pandas requests pybaseball pytest torch
+pip install -r requirements.txt
+python -m pytest -q tests
+
+# data pipeline (only needed to rebuild the datasets)
 python src/build_ids.py            # Chadwick IDs
 python src/prepare_contracts.py    # raw Spotrac scrape -> rule-compliant rows
 python src/clean_contracts.py      # validated data/processed/contracts.csv
-python -m pytest -q tests
+python src/scrape_bref_stats.py    # Baseball-Reference season tables (needs internet)
+python src/build_features.py       # contracts_features_hitters.csv / _pitchers.csv
+
+# models (validation only; never the 2024-2025 test classes until the final run)
+python src/linear_model.py                         # -> results/linear_val_metrics.csv
+python src/boosted_tree.py                         # -> results/boosted_tree_val_metrics.csv
+python src/train_nn.py --group hitters --tuned     # -> results/nn_val_metrics.csv (and --group pitchers)
+python src/tune_nn.py                              # network grid search -> results/nn_best_settings.json
 ```
 
 ## Style
@@ -41,3 +52,7 @@ functions, no notebooks-only logic (notebooks may call `src/`).
 - Every model is built twice: once trained only on the hitter data
   (`data/processed/contracts_features_hitters.csv`) and once only on the pitcher data
   (`contracts_features_pitchers.csv`), never on both together (D-09). Report results per group.
+- Model versions are added, never replaced, unless the team says otherwise. A change that alters a
+  model's results is a new version: keep the old behaviour reachable (a flag, a settings file, or a
+  new file), and append one row per group to `results/model_history.csv` with the new version number,
+  PR, decision IDs, a one-line description and the D-19 metrics. Never edit or delete existing rows.

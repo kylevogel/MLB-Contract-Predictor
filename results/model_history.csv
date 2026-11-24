@@ -1,0 +1,17 @@
+model,version,pr,decisions,description,group,n_train,n_val,within_5pct,within_10pct,mae_usd_m,mae_log,r2_log,years_bucket_accuracy,years_balanced_accuracy,years_mae
+linear,1,#26,D-18,"Ridge, log nominal AAV, years as a number, D-18 inputs",hitters,557,159,0.0629,0.1132,4.1295,0.6114,0.5187,0.4969,,0.9407
+linear,1,#26,D-18,"Ridge, log nominal AAV, years as a number, D-18 inputs",pitchers,632,185,0.0486,0.0811,4.1999,0.6509,0.4552,0.5351,,0.687
+boosted_tree,1,#27 (first commit),D-15 to D-17,"HistGradientBoosting regressors, log nominal AAV, years as a number, first-position feature",hitters,557,159,0.0881,0.1635,3.2897,0.5611,0.5563,0.6101,,0.8681
+boosted_tree,1,#27 (first commit),D-15 to D-17,"HistGradientBoosting regressors, log nominal AAV, years as a number, first-position feature",pitchers,632,185,0.0811,0.1135,3.8768,0.6405,0.4432,0.5622,,0.7412
+boosted_tree,2,#27,D-18,"Shared D-18 inputs, position buckets",hitters,557,159,0.0503,0.0881,3.3665,0.5634,0.5652,0.5849,,0.8733
+boosted_tree,2,#27,D-18,"Shared D-18 inputs, position buckets",pitchers,632,185,0.0811,0.1135,3.8768,0.6405,0.4432,0.5622,,0.7412
+boosted_tree,3,#37,D-19,"Luxury-tax share target, AAV cap, balanced length classifier, wider grid",hitters,557,159,0.0629,0.1069,3.2667,0.5548,0.5742,0.6101,0.4429,0.8428
+boosted_tree,3,#37,D-19,"Luxury-tax share target, AAV cap, balanced length classifier, wider grid",pitchers,632,185,0.0757,0.1243,3.5705,0.6001,0.4984,0.5622,0.377,0.7189
+nn,1,#25,D-15 to D-17,"Two-output MLP 64-32, log nominal AAV, inputs incl. is_resign, seed 0",hitters,557,159,0.0692,0.1258,3.8319,0.5858,0.5379,0.7044,,0.6981
+nn,1,#25,D-15 to D-17,"Two-output MLP 64-32, log nominal AAV, inputs incl. is_resign, seed 0",pitchers,632,185,0.0486,0.1189,4.122,0.6529,0.4282,0.6108,,0.6784
+nn,2,"#24, #25",D-18,"Shared D-18 inputs (no is_resign, + prev_contract_type), seed 0",hitters,557,159,0.0314,0.1321,4.0022,0.5964,0.5396,0.673,,0.7642
+nn,2,"#24, #25",D-18,"Shared D-18 inputs (no is_resign, + prev_contract_type), seed 0",pitchers,632,185,0.0595,0.1135,4.1544,0.6533,0.4243,0.6324,,0.6216
+nn,3,#34,D-19,"Luxury-tax share target, AAV cap, class-weighted length loss, mean of 5 seeds",hitters,557,159,0.0579,0.1245,3.4904,0.5799,0.5442,0.5623,0.3819,0.8667
+nn,3,#34,D-19,"Luxury-tax share target, AAV cap, class-weighted length loss, mean of 5 seeds",pitchers,632,185,0.0454,0.0876,3.6789,0.6049,0.5136,0.5697,0.3855,0.8557
+nn,4,#35,D-19,"Tuned on validation (#32 grid), mean of 5 seeds",hitters,557,159,0.0553,0.1283,3.3564,0.5681,0.5651,0.6201,0.4049,0.8409
+nn,4,#35,D-19,"Tuned on validation (#32 grid), mean of 5 seeds",pitchers,632,185,0.0486,0.107,3.5456,0.5822,0.5453,0.5795,0.3653,0.8
